@@ -1,22 +1,37 @@
 # %% 
 import time
 import requests
+import pandas as pd
 import matplotlib.pyplot as plt
-from matplotlib.patches import Rectangle
+import mplfinance as mpf
+import matplotlib.dates as mdates  # for mapping datetimes to x-axis positions
 
 # ====== CONFIG ======
 API = "http://flserver.rotman.utoronto.ca:14960/v1"   # <-- update if you prefer hostname instead of IP
 HDRS = {"Authorization": "Basic MTox"}
 
 INTERVAL_SEC  = 10      # set to 10s per candle
-POLL_INTERVAL = 0.2    # how often we query /securities (seconds)
-TICK_LIMIT    = 1800   # stop after this tick (use 300 if you want a short test)
+POLL_INTERVAL = 0.2     # how often we query /securities (seconds)
+TICK_LIMIT    = 1800    # stop after this tick (use 300 if you want a short test)
 
 # ------------------ Custom Candlestick Colors ------------------
 # Dark Green and Dark Red (Maroon) by default
 UP_COLOR   = "#008b66"  # rising candles (Close >= Open)
 DOWN_COLOR = "#d60000"  # falling candles (Close < Open)
 # --------------------------------------------------------------
+
+mc = mpf.make_marketcolors(
+    up=UP_COLOR,       # rising candles (Close >= Open)
+    down=DOWN_COLOR,   # falling candles (Close < Open)
+    edge="inherit",
+    wick="inherit",
+    volume="in"
+)
+
+mpf_style = mpf.make_mpf_style(
+    base_mpf_style="binance",
+    marketcolors=mc,
+) # binance, blueskies, brasil, classic, charles, default, mike, nightclouds, starsandstripes, yahoo, sas
 
 # ---------- Setup session ----------
 s = requests.Session()
@@ -48,6 +63,7 @@ def get_last_price(ticker):
             return sec["last"]
     raise KeyError(f"Ticker {ticker} not found in /securities")
 
+
 # ---------- Discover tickers & choose ONE ----------
 securities = get_all_securities()
 all_tickers = [sec["ticker"] for sec in securities]
@@ -62,6 +78,10 @@ print("Tracking ticker:", TARGET_TICKER)
 candles = []
 current_candle = None
 
+# We'll use a datetime index for mplfinance
+t0 = time.time()
+start_time = pd.to_datetime(t0, unit="s")
+
 # ---------- Matplotlib style ----------
 size = 20
 plt.rcParams['lines.linewidth'] = 3
@@ -73,12 +93,10 @@ plt.rc('font', family='serif')
 plt.ion()
 fig, ax = plt.subplots(figsize=(12, 6))
 ax.set_title(f"Real-time candlestick: {TARGET_TICKER}")
-ax.set_xlabel("Time (Tickts)")
+ax.set_xlabel("Time (Ticks)")
 ax.set_ylabel("Price")
 
 # ---------- Real-time loop ----------
-t0 = time.time()
-
 while True:
     # Check case status
     try:
@@ -117,75 +135,60 @@ while True:
         # Start a new candle
         current_candle = {
             "bucket": bucket,
-            "open": price,
-            "high": price,
-            "low": price,
+            "open":  price,
+            "high":  price,
+            "low":   price,
             "close": price,
         }
         candles.append(current_candle)
     else:
         # Update existing candle
-        current_candle["high"] = max(current_candle["high"], price)
-        current_candle["low"]  = min(current_candle["low"], price)
+        current_candle["high"]  = max(current_candle["high"], price)
+        current_candle["low"]   = min(current_candle["low"],  price)
         current_candle["close"] = price
 
-    # ---------- Redraw candlesticks ----------
-    ax.clear()
-    ax.set_title(f"Real-time candlestick: {TARGET_TICKER}")
-    ax.set_xlabel("Time (Ticks)")
-    ax.set_ylabel("Price")
-
+    # ---------- Redraw using mplfinance ----------
     if candles:
-        xs     = [c["bucket"] * INTERVAL_SEC for c in candles]
-        opens  = [c["open"]  for c in candles]
-        highs  = [c["high"]  for c in candles]
-        lows   = [c["low"]   for c in candles]
-        closes = [c["close"] for c in candles]
+        # Build datetime index for buckets (mplfinance requires DatetimeIndex)
+        times = [
+            start_time + pd.Timedelta(seconds=c["bucket"] * INTERVAL_SEC)
+            for c in candles
+        ]
+        # X-axis values like Method 1: bucket * INTERVAL_SEC
+        xs = [c["bucket"] * INTERVAL_SEC for c in candles]
 
-        width = INTERVAL_SEC * 0.6  # candle body width in time units
+        df = pd.DataFrame(
+            {
+                "Open":  [c["open"]  for c in candles],
+                "High":  [c["high"]  for c in candles],
+                "Low":   [c["low"]   for c in candles],
+                "Close": [c["close"] for c in candles],
+            },
+            index=pd.DatetimeIndex(times, name="Date")
+        )
 
-        # Precompute a minimal visible body size for completely flat candles
-        price_range = max(highs) - min(lows)
-        min_body_height = price_range * 0.001 if price_range > 0 else 0.01
+        ax.clear()
 
-        for x, o, h, l, c in zip(xs, opens, highs, lows, closes):
-            # Use custom colors
-            color = UP_COLOR if c >= o else DOWN_COLOR
+        # plot into existing axes
+        mpf.plot(
+            df,
+            type="candle",
+            style=mpf_style,
+            ax=ax,
+            show_nontrading=True,
+        )
 
-            # Determine the top and bottom of the rectangular body
-            body_top = max(o, c)
-            body_bottom = min(o, c)
+        ax.set_title(f"Real-time candlestick: {TARGET_TICKER}")
+        ax.set_xlabel("Time (Ticks)")
+        ax.set_ylabel("Price")
 
-            # --- Draw Wicks (only the portions not covered by the bar) ---
+        # Horizontal lines as background (y-grid only)
+        ax.yaxis.grid(True, linestyle='--', alpha=0.4)
 
-            # 1. Upper Wick (from High 'h' down to body_top)
-            if h > body_top:
-                ax.vlines(x, body_top, h, color=color, linewidth=1.0)
-
-            # 2. Lower Wick (from body_bottom down to Low 'l')
-            if l < body_bottom:
-                ax.vlines(x, l, body_bottom, color=color, linewidth=1.0)
-
-            # --- Draw Body ---
-            body_height = abs(c - o)
-            if body_height == 0:
-                # Draw a tiny body so flat candles are visible
-                body_height = min_body_height
-
-            rect = Rectangle(
-                (x - width / 2, body_bottom),
-                width,
-                body_height,
-                facecolor=color,
-                edgecolor=color,
-                alpha=0.7,
-            )
-            ax.add_patch(rect)
-
-        ax.set_xlim(xs[0] - INTERVAL_SEC, xs[-1] + INTERVAL_SEC)
-
-    ax.relim()
-    ax.autoscale_view()
+        # Map datetime index to numeric x positions and relabel with Method 1 x-axis (xs)
+        x_positions = [mdates.date2num(ts) for ts in df.index]
+        ax.set_xticks(x_positions)
+        ax.set_xticklabels(xs)  # show "Time (Ticks)" like Method 1, no rotation
 
     fig.canvas.draw_idle()
     plt.pause(0.01)
