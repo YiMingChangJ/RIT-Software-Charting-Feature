@@ -1,4 +1,4 @@
-# %%
+# %% 
 import time
 import requests
 import matplotlib.pyplot as plt
@@ -8,10 +8,12 @@ from matplotlib.patches import Rectangle
 API = "http://flserver.rotman.utoronto.ca:14960/v1"   # <-- update if you prefer hostname instead of IP
 HDRS = {"Authorization": "Basic MTox"}
 
-INTERVAL_SEC  = 10      # set to 10s per candle
-POLL_INTERVAL = 0.2     # how often we query /securities (seconds)
-TICK_LIMIT    = 1800    # stop after this tick (use 300 if you want a short test)
-NEWS_POLL_INTERVAL = 1.0  # seconds between /news requests
+INTERVAL_SEC       = 10     # set to 10s per candle
+POLL_INTERVAL      = 0.2    # how often we query /securities (seconds)
+TICK_LIMIT         = 1800   # stop after this tick (use 300 if you want a short test)
+CASE_POLL_INTERVAL = 0.5    # how often we poll /case (tick & status)
+NEWS_POLL_INTERVAL = 4.0    # how often we poll /news (seconds)
+VISIBLE_MAX        = None   # None = show all candles, or set e.g. 400 for speed
 
 # ------------------ Custom Candlestick Colors ------------------
 # Dark Green and Dark Red (Maroon) by default
@@ -22,35 +24,15 @@ DOWN_COLOR = "#d60000"  # falling candles (Close < Open)
 # ---------- Setup session ----------
 s = requests.Session()
 s.headers.update(HDRS)
-# or s.auth = ("1", "0")  # depending on how auth is set up
+# or s.auth = ("1", "1")  # depending on how auth is set up
 
 
-# ---------- Helper to get case tick & status ----------
+# ---------- Helper Functions ----------
 def get_tick_status():
     """Return the live simulator tick and status."""
     r = s.get(f"{API}/case", timeout=2.0)
-    r.raise_for_status()
     j = r.json()
     return j["tick"], j["status"]
-
-
-# ---------- Helper to get all securities ----------
-def get_all_securities():
-    r = s.get(f"{API}/securities", timeout=2.0)
-    r.raise_for_status()
-    return r.json()
-
-
-# ---------- Helper to get last price for specific ticker ----------
-def get_last_price(ticker):
-    securities = get_all_securities()
-    for sec in securities:
-        if sec["ticker"] == ticker:
-            return sec["last"]
-    raise KeyError(f"Ticker {ticker} not found in /securities")
-
-
-# ---------- Helper to get current & previous news ----------
 def get_news_headlines():
     """
     Return (current_news, previous_news) or (None, None) on error.
@@ -64,7 +46,6 @@ def get_news_headlines():
         r.raise_for_status()
         data = r.json()
     except Exception:
-        # On error: don't change what is currently displayed
         return None, None
 
     cur = ""
@@ -72,34 +53,16 @@ def get_news_headlines():
 
     if isinstance(data, list):
         if len(data) > 0:
-            cur = _extract_headline(data[0])
+            cur = data[0]['headline']
         if len(data) > 1:
-            prev = _extract_headline(data[1])
+            prev = data[1]['headline']
     else:
-        # Non-list: treat as single current headline
-        cur = _extract_headline(data)
+        cur = data[0]['headline']
 
     return cur, prev
 
 
-def _extract_headline(item):
-    """Best-effort extraction of a headline string from an item."""
-    if isinstance(item, dict):
-        for key in ("headline", "title", "news", "text", "message"):
-            if key in item:
-                return str(item[key])
-        return str(item)
-    return str(item)
-
-
-# ---------- Discover tickers & choose ONE ----------
-securities = get_all_securities()
-all_tickers = [sec["ticker"] for sec in securities]
-print("All tickers:", all_tickers)
-
-# Choose the first ticker for now. You can hardcode instead, e.g. TARGET_TICKER = "RTM"
-TARGET_TICKER = all_tickers[0]
-print("Tracking ticker:", TARGET_TICKER)
+tkr = s.get(f"{API}/securities").json()[0]['ticker']
 
 # ---------- Candlestick storage ----------
 # Each candle is a dict: {bucket, open, high, low, close}
@@ -107,7 +70,7 @@ candles = []
 current_candle = None
 
 # ---------- Matplotlib style ----------
-size = 20
+size = 15
 plt.rcParams['lines.linewidth'] = 3
 plt.rcParams.update({'font.size': size})
 plt.rc('xtick', labelsize=size - 2)
@@ -130,7 +93,7 @@ previous_news_text = fig.text(
 )
 current_news_text = fig.text(
     0.5, 0.93, "", ha="center", va="top",
-    fontsize=size, color="green", fontweight="bold"
+    fontsize=size, color="#00058b", fontweight="bold"  # dark green title
 )
 
 # Info texts just above the graph (left: index, right: time remaining)
@@ -143,23 +106,30 @@ info_right_text = fig.text(
     fontsize=size - 2
 )
 
-# ---------- News state ----------
+# ---------- News & case state ----------
 current_news = ""
 previous_news = ""
 last_news_poll = 0.0
+last_case_poll = 0.0
+tick = 0
+status = "unknown"
 
 # ---------- Real-time loop ----------
 t0 = time.time()
 
 while True:
-    # Check case status
-    try:
-        tick, status = get_tick_status()
-    except Exception as e:
-        print("Error getting case status:", e)
-        break
+    now = time.time()
+    elapsed = now - t0
 
-    print(f"tick={tick}, status={status}")
+    # Poll /case (tick & status) less frequently
+    if now - last_case_poll >= CASE_POLL_INTERVAL:
+        try:
+            tick, status = get_tick_status()
+        except Exception as e:
+            print("Error getting case status:", e)
+            break
+        last_case_poll = now
+        print(f"tick={tick}, status={status}")
 
     # Stop condition: tick >= limit OR status not active/running
     if tick >= TICK_LIMIT or status.lower() not in ("active", "running"):
@@ -168,19 +138,16 @@ while True:
 
     # Get latest price (current index level)
     try:
-        price = get_last_price(TARGET_TICKER)
+        price = s.get(f"{API}/securities").json()[0]['last']
     except Exception as e:
         print("Error getting price:", e)
-        time.sleep(POLL_INTERVAL)
+     #    time.sleep(POLL_INTERVAL)
         continue
 
-    # In case last price is None (no trades yet)
-    if price is None:
-        time.sleep(POLL_INTERVAL)
-        continue
-
-    now = time.time()
-    elapsed = now - t0
+#     # In case last price is None (no trades yet)
+#     if price is None:
+#         time.sleep(POLL_INTERVAL)
+#         continue
 
     # Poll /news only every NEWS_POLL_INTERVAL seconds
     if now - last_news_poll >= NEWS_POLL_INTERVAL:
@@ -216,11 +183,17 @@ while True:
     ax.set_ylabel("Price")
 
     if candles:
-        xs     = [c["bucket"] * INTERVAL_SEC for c in candles]
-        opens  = [c["open"]  for c in candles]
-        highs  = [c["high"]  for c in candles]
-        lows   = [c["low"]   for c in candles]
-        closes = [c["close"] for c in candles]
+        # Optionally only draw last VISIBLE_MAX candles for speed
+        if VISIBLE_MAX is not None and len(candles) > VISIBLE_MAX:
+            draw_candles = candles[-VISIBLE_MAX:]
+        else:
+            draw_candles = candles
+
+        xs     = [c["bucket"] * INTERVAL_SEC for c in draw_candles]
+        opens  = [c["open"]  for c in draw_candles]
+        highs  = [c["high"]  for c in draw_candles]
+        lows   = [c["low"]   for c in draw_candles]
+        closes = [c["close"] for c in draw_candles]
 
         width = INTERVAL_SEC * 0.6  # candle body width in time units
 
@@ -237,20 +210,15 @@ while True:
             body_bottom = min(o, c)
 
             # --- Draw Wicks (only the portions not covered by the bar) ---
-
-            # 1. Upper Wick (from High 'h' down to body_top)
             if h > body_top:
                 ax.vlines(x, body_top, h, color=color, linewidth=1.0)
-
-            # 2. Lower Wick (from body_bottom down to Low 'l')
             if l < body_bottom:
                 ax.vlines(x, l, body_bottom, color=color, linewidth=1.0)
 
             # --- Draw Body ---
             body_height = abs(c - o)
             if body_height == 0:
-                # Draw a tiny body so flat candles are visible
-                body_height = min_body_height
+                body_height = min_body_height  # tiny body so flat candles are visible
 
             rect = Rectangle(
                 (x - width / 2, body_bottom),
@@ -274,7 +242,7 @@ while True:
     rem_sec = remaining_ticks % 60
 
     info_left_text.set_text(
-        r"$\bf{Current\ Index\ Level:}$ " + f"{price:.2f}"
+        r"$\bf{Current\ Index\ Level:}$ " + f"{price}"
     )
     info_right_text.set_text(
         r"$\bf{Time\ Remaining:}$ " + f"{rem_min:02d}:{rem_sec:02d}"
