@@ -9,8 +9,8 @@ API = "http://flserver.rotman.utoronto.ca:14960/v1"   # <-- update if you prefer
 HDRS = {"Authorization": "Basic MTox"}
 
 INTERVAL_SEC  = 10      # set to 10s per candle
-POLL_INTERVAL = 0.2    # how often we query /securities (seconds)
-TICK_LIMIT    = 1800   # stop after this tick (use 300 if you want a short test)
+POLL_INTERVAL = 0.2     # how often we query /securities (seconds)
+TICK_LIMIT    = 1800    # stop after this tick (use 300 if you want a short test)
 
 # ------------------ Custom Candlestick Colors ------------------
 # Dark Green and Dark Red (Maroon) by default
@@ -48,6 +48,48 @@ def get_last_price(ticker):
             return sec["last"]
     raise KeyError(f"Ticker {ticker} not found in /securities")
 
+
+# ---------- Helper to get current & previous news ----------
+def get_news_headlines():
+    """
+    Return (current_news, previous_news).
+
+    By spec:
+      - most recent news is data[0]
+      - previous news is data[1]
+    """
+    try:
+        r = s.get(f"{API}/news", timeout=2.0)
+        r.raise_for_status()
+        data = r.json()
+    except Exception:
+        return "", ""
+
+    cur = ""
+    prev = ""
+
+    if isinstance(data, list):
+        if len(data) > 0:
+            cur = _extract_headline(data[0])
+        if len(data) > 1:
+            prev = _extract_headline(data[1])
+    else:
+        # Non-list: treat as single current headline
+        cur = _extract_headline(data)
+
+    return cur, prev
+
+
+def _extract_headline(item):
+    """Best-effort extraction of a headline string from an item."""
+    if isinstance(item, dict):
+        for key in ("headline", "title", "news", "text", "message"):
+            if key in item:
+                return str(item[key])
+        return str(item)
+    return str(item)
+
+
 # ---------- Discover tickers & choose ONE ----------
 securities = get_all_securities()
 all_tickers = [sec["ticker"] for sec in securities]
@@ -72,9 +114,32 @@ plt.rc('font', family='serif')
 
 plt.ion()
 fig, ax = plt.subplots(figsize=(12, 6))
-ax.set_title(f"Real-time candlestick: {TARGET_TICKER}")
-ax.set_xlabel("Time (Tickts)")
+
+# Make extra space at the top for news + info lines
+fig.subplots_adjust(top=0.78)
+
+ax.set_xlabel("Time (Ticks)")
 ax.set_ylabel("Price")
+
+# News texts at very top of the figure
+previous_news_text = fig.text(
+    0.5, 0.97, "", ha="center", va="top",
+    fontsize=size - 4, color="dimgray"
+)
+current_news_text = fig.text(
+    0.5, 0.93, "", ha="center", va="top",
+    fontsize=size, color="green", fontweight="bold"
+)
+
+# Info texts just above the graph (left: index, right: time remaining)
+info_left_text = fig.text(
+    0.05, 0.84, "", ha="left", va="bottom",
+    fontsize=size - 2
+)
+info_right_text = fig.text(
+    0.95, 0.84, "", ha="right", va="bottom",
+    fontsize=size - 2
+)
 
 # ---------- Real-time loop ----------
 t0 = time.time()
@@ -94,7 +159,7 @@ while True:
         print(f"Stopping: tick={tick}, status={status}")
         break
 
-    # Get latest price
+    # Get latest price (current index level)
     try:
         price = get_last_price(TARGET_TICKER)
     except Exception as e:
@@ -107,6 +172,9 @@ while True:
         time.sleep(POLL_INTERVAL)
         continue
 
+    # Get current & previous news directly from /news
+    current_news, previous_news = get_news_headlines()
+
     now = time.time()
     elapsed = now - t0
 
@@ -117,21 +185,20 @@ while True:
         # Start a new candle
         current_candle = {
             "bucket": bucket,
-            "open": price,
-            "high": price,
-            "low": price,
+            "open":  price,
+            "high":  price,
+            "low":   price,
             "close": price,
         }
         candles.append(current_candle)
     else:
         # Update existing candle
-        current_candle["high"] = max(current_candle["high"], price)
-        current_candle["low"]  = min(current_candle["low"], price)
+        current_candle["high"]  = max(current_candle["high"], price)
+        current_candle["low"]   = min(current_candle["low"],  price)
         current_candle["close"] = price
 
     # ---------- Redraw candlesticks ----------
     ax.clear()
-    ax.set_title(f"Real-time candlestick: {TARGET_TICKER}")
     ax.set_xlabel("Time (Ticks)")
     ax.set_ylabel("Price")
 
@@ -182,10 +249,27 @@ while True:
             )
             ax.add_patch(rect)
 
+        ax.yaxis.grid(True, linestyle='--', alpha=0.4)
         ax.set_xlim(xs[0] - INTERVAL_SEC, xs[-1] + INTERVAL_SEC)
 
     ax.relim()
     ax.autoscale_view()
+
+    # ---------- Update info: current index level & time remaining ----------
+    remaining_ticks = max(TICK_LIMIT - tick, 0)
+    rem_min = remaining_ticks // 60
+    rem_sec = remaining_ticks % 60
+
+    info_left_text.set_text(
+        r"$\bf{Current\ Index\ Level:}$ " + f"{price:.2f}"
+    )
+    info_right_text.set_text(
+        r"$\bf{Time\ Remaining:}$ " + f"{rem_min:02d}:{rem_sec:02d}"
+    )
+
+    # ---------- Update news texts (figure title area) ----------
+    previous_news_text.set_text(previous_news or "")
+    current_news_text.set_text(current_news or "")
 
     fig.canvas.draw_idle()
     plt.pause(0.01)

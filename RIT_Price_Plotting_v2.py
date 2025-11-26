@@ -21,17 +21,17 @@ DOWN_COLOR = "#d60000"  # falling candles (Close < Open)
 # --------------------------------------------------------------
 
 mc = mpf.make_marketcolors(
-    up=UP_COLOR,       # rising candles (Close >= Open)
-    down=DOWN_COLOR,   # falling candles (Close < Open)
+    up=UP_COLOR,
+    down=DOWN_COLOR,
     edge="inherit",
     wick="inherit",
-    volume="in"
+    volume="in",
 )
 
 mpf_style = mpf.make_mpf_style(
     base_mpf_style="binance",
     marketcolors=mc,
-) # binance, blueskies, brasil, classic, charles, default, mike, nightclouds, starsandstripes, yahoo, sas
+)  # binance, blueskies, brasil, classic, charles, default, mike, nightclouds, starsandstripes, yahoo, sas
 
 # ---------- Setup session ----------
 s = requests.Session()
@@ -78,10 +78,6 @@ print("Tracking ticker:", TARGET_TICKER)
 candles = []
 current_candle = None
 
-# We'll use a datetime index for mplfinance
-t0 = time.time()
-start_time = pd.to_datetime(t0, unit="s")
-
 # ---------- Matplotlib style ----------
 size = 20
 plt.rcParams['lines.linewidth'] = 3
@@ -95,6 +91,10 @@ fig, ax = plt.subplots(figsize=(12, 6))
 ax.set_title(f"Real-time candlestick: {TARGET_TICKER}")
 ax.set_xlabel("Time (Ticks)")
 ax.set_ylabel("Price")
+
+# reference time for building a DatetimeIndex (mplfinance requirement)
+t0 = time.time()
+start_time = pd.to_datetime(t0, unit="s")
 
 # ---------- Real-time loop ----------
 while True:
@@ -135,10 +135,10 @@ while True:
         # Start a new candle
         current_candle = {
             "bucket": bucket,
-            "open":  price,
-            "high":  price,
-            "low":   price,
-            "close": price,
+            "open":   price,
+            "high":   price,
+            "low":    price,
+            "close":  price,
         }
         candles.append(current_candle)
     else:
@@ -147,15 +147,21 @@ while True:
         current_candle["low"]   = min(current_candle["low"],  price)
         current_candle["close"] = price
 
-    # ---------- Redraw using mplfinance ----------
+    # ---------- Redraw candlesticks (now via mplfinance) ----------
+    ax.clear()
+    ax.set_title(f"Real-time candlestick: {TARGET_TICKER}")
+    ax.set_xlabel("Time (Ticks)")
+    ax.set_ylabel("Price")
+
     if candles:
-        # Build datetime index for buckets (mplfinance requires DatetimeIndex)
-        times = [
-            start_time + pd.Timedelta(seconds=c["bucket"] * INTERVAL_SEC)
-            for c in candles
-        ]
-        # X-axis values like Method 1: bucket * INTERVAL_SEC
+        # xs like Method 1: 0, 10, 20, ...
         xs = [c["bucket"] * INTERVAL_SEC for c in candles]
+
+        # Build datetime index for mplfinance (internal x-axis)
+        times = [
+            start_time + pd.Timedelta(seconds=x)
+            for x in xs
+        ]
 
         df = pd.DataFrame(
             {
@@ -164,12 +170,10 @@ while True:
                 "Low":   [c["low"]   for c in candles],
                 "Close": [c["close"] for c in candles],
             },
-            index=pd.DatetimeIndex(times, name="Date")
+            index=pd.DatetimeIndex(times, name="Date"),  # mplfinance needs DatetimeIndex
         )
 
-        ax.clear()
-
-        # plot into existing axes
+        # Use mplfinance to draw candles into our existing axes
         mpf.plot(
             df,
             type="candle",
@@ -178,17 +182,34 @@ while True:
             show_nontrading=True,
         )
 
-        ax.set_title(f"Real-time candlestick: {TARGET_TICKER}")
-        ax.set_xlabel("Time (Ticks)")
-        ax.set_ylabel("Price")
-
-        # Horizontal lines as background (y-grid only)
+        # Horizontal lines as background (y-grid only), like your modified Method 1
         ax.yaxis.grid(True, linestyle='--', alpha=0.4)
 
-        # Map datetime index to numeric x positions and relabel with Method 1 x-axis (xs)
-        x_positions = [mdates.date2num(ts) for ts in df.index]
-        ax.set_xticks(x_positions)
-        ax.set_xticklabels(xs)  # show "Time (Ticks)" like Method 1, no rotation
+        # Relabel x-axis back to "Time (Ticks)" using xs, but let Matplotlib choose how many
+        xlocs = ax.get_xticks()  # these are in date-number units
+        tick_labels = []
+        for xval in xlocs:
+            dt = mdates.num2date(xval).replace(tzinfo=None)
+            secs = (dt - start_time.to_pydatetime()).total_seconds()
+            # Map back to nearest bucket index
+            bucket_idx = int(round(secs / INTERVAL_SEC))
+            if bucket_idx < 0:
+                bucket_idx = 0
+            if bucket_idx >= len(xs):
+                bucket_idx = len(xs) - 1
+            tick_labels.append(str(xs[bucket_idx]))  # label = time in ticks
+
+        ax.set_xticks(xlocs)
+        ax.set_xticklabels(tick_labels)
+        for lbl in ax.get_xticklabels():
+            lbl.set_rotation(0)
+
+        # Keep roughly same x-limits logic as Method 1
+        ax.set_xlim(times[0] - pd.Timedelta(seconds=INTERVAL_SEC),
+                    times[-1] + pd.Timedelta(seconds=INTERVAL_SEC))
+
+    ax.relim()
+    ax.autoscale_view()
 
     fig.canvas.draw_idle()
     plt.pause(0.01)
