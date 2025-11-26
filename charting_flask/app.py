@@ -104,8 +104,8 @@ current_candle = None
 size = 18
 plt.rcParams['lines.linewidth'] = 3
 plt.rcParams.update({'font.size': size})
-plt.rc('xtick', labelsize=size+3)
-plt.rc('ytick', labelsize=size+3)
+plt.rc('xtick', labelsize=size + 3)
+plt.rc('ytick', labelsize=size + 3)
 plt.rc('font', family='serif')
 
 # state for news & case
@@ -202,7 +202,7 @@ def make_figure():
     )
     current_news_text = fig.text(
         0.5, 0.93, "", ha="center", va="top",
-        fontsize=size + 4,  # larger current-news font
+        fontsize=size + 6,  # larger current-news font
         color="#00058b", fontweight="bold"
     )
 
