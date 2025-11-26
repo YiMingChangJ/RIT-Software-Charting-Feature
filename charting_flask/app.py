@@ -32,7 +32,6 @@ s = requests.Session()
 s.headers.update(HDRS)
 # or s.auth = ("1", "1")
 
-
 # ---------- Helper Functions ----------
 def get_tick_status():
     """Return the live simulator tick and status."""
@@ -299,7 +298,6 @@ def make_figure():
 def index():
     # HTML page that shows the chart centered
     return render_template("index.html")
-
 
 @app.route("/chart.png")
 def chart_png():
