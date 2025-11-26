@@ -188,8 +188,8 @@ def make_figure():
     # Make extra space at the top for news + info lines
     fig.subplots_adjust(top=0.78)
 
-    ax.set_xlabel("Time (Ticks)")
-    ax.set_ylabel("Price")
+    ax.set_xlabel("Time (Ticks)", fontsize = size + 3)
+    ax.set_ylabel("Price", fontsize = size + 3)
 
     # --- Prepare wrapped news text ---
     wrapped_current = wrap_headline(current_news or "", max_len=130)
@@ -208,12 +208,12 @@ def make_figure():
 
     # Info texts just above the graph (left: index, right: time remaining)
     info_left_text = fig.text(
-        0.05, 0.84, "", ha="left", va="bottom",
-        fontsize=size - 2
+        0.1, 0.8, "", ha="left", va="bottom",
+        fontsize=size + 3
     )
     info_right_text = fig.text(
-        0.95, 0.84, "", ha="right", va="bottom",
-        fontsize=size - 2
+        0.9, 0.8, "", ha="right", va="bottom",
+        fontsize=size + 3
     )
 
     # ---------- Redraw candlesticks (same as your loop) ----------
