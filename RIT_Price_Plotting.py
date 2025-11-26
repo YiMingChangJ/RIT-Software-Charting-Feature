@@ -30,7 +30,7 @@ s.headers.update(HDRS)
 # ---------- Helper Functions ----------
 def get_tick_status():
     """Return the live simulator tick and status."""
-    r = s.get(f"{API}/case", timeout=2.0)
+    r = s.get(f"{API}/case")
     j = r.json()
     return j["tick"], j["status"]
 def get_news_headlines():
@@ -42,7 +42,7 @@ def get_news_headlines():
       - previous news is data[1]
     """
     try:
-        r = s.get(f"{API}/news", timeout=2.0)
+        r = s.get(f"{API}/news")
         r.raise_for_status()
         data = r.json()
     except Exception:
@@ -73,8 +73,8 @@ current_candle = None
 size = 15
 plt.rcParams['lines.linewidth'] = 3
 plt.rcParams.update({'font.size': size})
-plt.rc('xtick', labelsize=size - 2)
-plt.rc('ytick', labelsize=size - 2)
+plt.rc('xtick', labelsize=size+3)
+plt.rc('ytick', labelsize=size+3)
 plt.rc('font', family='serif')
 
 plt.ion()
@@ -230,7 +230,7 @@ while True:
             )
             ax.add_patch(rect)
 
-        ax.yaxis.grid(True, linestyle='--', alpha=0.4)
+        ax.yaxis.grid(True, linestyle='--', alpha=0.7)
         ax.set_xlim(xs[0] - INTERVAL_SEC, xs[-1] + INTERVAL_SEC)
 
     ax.relim()
