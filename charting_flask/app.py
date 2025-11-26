@@ -2,6 +2,7 @@
 import time
 import io
 import requests
+import textwrap
 import matplotlib
 matplotlib.use("Agg")  # backend for PNG rendering (no GUI)
 import matplotlib.pyplot as plt
@@ -31,6 +32,7 @@ DOWN_COLOR = "#d60000"  # falling candles (Close < Open)
 s = requests.Session()
 s.headers.update(HDRS)
 # or s.auth = ("1", "1")
+
 
 # ---------- Helper Functions ----------
 def get_tick_status():
@@ -71,27 +73,32 @@ def get_news_headlines():
     return cur, prev
 
 
-def wrap_headline(text: str, max_len: int = 180) -> str:
+def wrap_headline(text: str, width: int = 100, max_lines: int = 4) -> str:
     """
-    Wrap a headline into at most 2 lines.
-    If length > max_len, insert a newline at the last space before max_len.
+    Wrap headline to multiple lines without breaking words.
+    width      = approx characters per line (controls left/right margin)
+    max_lines  = maximum number of lines to keep
     """
     if not text:
         return ""
 
-    text = text.strip()
-    if len(text) <= max_len:
-        return text
+    # Normalize whitespace
+    text = " ".join(text.split())
 
-    # find last space before max_len; if none, hard cut at max_len
-    break_idx = text.rfind(" ", 0, max_len)
-    if break_idx == -1:
-        break_idx = max_len
+    # Wrap on word boundaries only
+    lines = textwrap.wrap(
+        text,
+        width=width,
+        break_long_words=False,
+        break_on_hyphens=False,
+    )
 
-    line1 = text[:break_idx].strip()
-    line2 = text[break_idx:].strip()
-    return line1 + "\n" + line2
+    if not lines:
+        return ""
 
+    # Limit number of lines
+    lines = lines[:max_lines]
+    return "\n".join(lines)
 
 # ticker (first security)
 tkr = s.get(f"{API}/securities").json()[0]['ticker']
@@ -104,8 +111,8 @@ current_candle = None
 size = 18
 plt.rcParams['lines.linewidth'] = 3
 plt.rcParams.update({'font.size': size})
-plt.rc('xtick', labelsize=size + 3)
-plt.rc('ytick', labelsize=size + 3)
+plt.rc('xtick', labelsize=size)
+plt.rc('ytick', labelsize=size)
 plt.rc('font', family='serif')
 
 # state for news & case
@@ -183,37 +190,38 @@ def update_state():
 
 def make_figure():
     """Create a Matplotlib figure EXACTLY like your script does."""
-    fig, ax = plt.subplots(figsize=(32, 13))
+    fig, ax = plt.subplots(figsize=(19, 11))
 
     # Make extra space at the top for news + info lines
     fig.subplots_adjust(top=0.78)
 
-    ax.set_xlabel("Time (Ticks)", fontsize = size + 3)
-    ax.set_ylabel("Price", fontsize = size + 3)
+    ax.set_xlabel("Time (Ticks)", fontsize=size)
+    ax.set_ylabel("Price", fontsize=size)
 
     # --- Prepare wrapped news text ---
-    wrapped_current = wrap_headline(current_news or "", max_len=130)
-    wrapped_previous = wrap_headline(previous_news or "", max_len=130)
+    # Use slightly narrower width for current (bigger font), slightly wider for previous
+    wrapped_current = wrap_headline(current_news or "", width=85, max_lines=4)
+    wrapped_previous = wrap_headline(previous_news or "", width=110, max_lines=3)
 
     # News texts at very top of the figure
     previous_news_text = fig.text(
         0.5, 0.97, "", ha="center", va="top",
-        fontsize=size - 2, color="dimgray"
+        fontsize=size - 4, color="dimgray"
     )
     current_news_text = fig.text(
-        0.5, 0.93, "", ha="center", va="top",
-        fontsize=size + 6,  # larger current-news font
+        0.5, 0.91, "", ha="center", va="top",
+        fontsize=size,  # larger current-news font
         color="#00058b", fontweight="bold"
     )
 
     # Info texts just above the graph (left: index, right: time remaining)
     info_left_text = fig.text(
         0.1, 0.8, "", ha="left", va="bottom",
-        fontsize=size + 3
+        fontsize=size
     )
     info_right_text = fig.text(
         0.9, 0.8, "", ha="right", va="bottom",
-        fontsize=size + 3
+        fontsize=size
     )
 
     # ---------- Redraw candlesticks (same as your loop) ----------
@@ -298,6 +306,7 @@ def make_figure():
 def index():
     # HTML page that shows the chart centered
     return render_template("index.html")
+
 
 @app.route("/chart.png")
 def chart_png():
