@@ -1,4 +1,4 @@
-# %% 
+# %%
 import time
 import requests
 import matplotlib.pyplot as plt
@@ -11,6 +11,7 @@ HDRS = {"Authorization": "Basic MTox"}
 INTERVAL_SEC  = 10      # set to 10s per candle
 POLL_INTERVAL = 0.2     # how often we query /securities (seconds)
 TICK_LIMIT    = 1800    # stop after this tick (use 300 if you want a short test)
+NEWS_POLL_INTERVAL = 1.0  # seconds between /news requests
 
 # ------------------ Custom Candlestick Colors ------------------
 # Dark Green and Dark Red (Maroon) by default
@@ -52,7 +53,7 @@ def get_last_price(ticker):
 # ---------- Helper to get current & previous news ----------
 def get_news_headlines():
     """
-    Return (current_news, previous_news).
+    Return (current_news, previous_news) or (None, None) on error.
 
     By spec:
       - most recent news is data[0]
@@ -63,7 +64,8 @@ def get_news_headlines():
         r.raise_for_status()
         data = r.json()
     except Exception:
-        return "", ""
+        # On error: don't change what is currently displayed
+        return None, None
 
     cur = ""
     prev = ""
@@ -141,6 +143,11 @@ info_right_text = fig.text(
     fontsize=size - 2
 )
 
+# ---------- News state ----------
+current_news = ""
+previous_news = ""
+last_news_poll = 0.0
+
 # ---------- Real-time loop ----------
 t0 = time.time()
 
@@ -172,11 +179,17 @@ while True:
         time.sleep(POLL_INTERVAL)
         continue
 
-    # Get current & previous news directly from /news
-    current_news, previous_news = get_news_headlines()
-
     now = time.time()
     elapsed = now - t0
+
+    # Poll /news only every NEWS_POLL_INTERVAL seconds
+    if now - last_news_poll >= NEWS_POLL_INTERVAL:
+        cur, prev = get_news_headlines()
+        if cur is not None:
+            current_news = cur
+        if prev is not None:
+            previous_news = prev
+        last_news_poll = now
 
     # Determine which candle "bucket" this time belongs to
     bucket = int(elapsed // INTERVAL_SEC)  # 0,1,2,...
