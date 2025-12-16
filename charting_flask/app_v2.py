@@ -11,7 +11,10 @@ from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
 from flask import Flask, Response, render_template, request, jsonify
 
 app = Flask(__name__)
-
+"""
+Enter url through web browswer: http://127.0.0.1:5000/
+Remember to create new user
+"""
 # ====== CONFIG ======
 API = "http://flserver.rotman.utoronto.ca:14960/v1"
 HDRS = {"Authorization": "Basic MTox"}
