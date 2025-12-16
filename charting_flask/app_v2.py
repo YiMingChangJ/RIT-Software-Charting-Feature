@@ -12,17 +12,18 @@ from flask import Flask, Response, render_template, request, jsonify
 
 app = Flask(__name__)
 
+"http://127.0.0.1:5000"
 # ====== CONFIG ======
 API = "http://flserver.rotman.utoronto.ca:14960/v1"
 HDRS = {"Authorization": "Basic MTox"}
 
 TICK_LIMIT         = 1800     # freeze once tick>=limit (or case stops)
 CASE_POLL_INTERVAL = 0.5
-NEWS_POLL_INTERVAL = 4.0
+NEWS_POLL_INTERVAL = 1.0
 
 # History polling (avoid hammering endpoint every frame)
 HIST_POLL_INTERVAL = 0.5
-HISTORY_LIMIT      = 5000     # if API supports "limit", we send it; otherwise ignored
+HISTORY_LIMIT      = 15000     # if API supports "limit", we send it; otherwise ignored
 
 DEFAULT_CANDLE_TICKS = 10     # ticks per candle (10 => 10-tick candles)
 VISIBLE_MAX          = None   # None = show all candles; or set e.g. 400

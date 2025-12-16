@@ -1,7 +1,3 @@
-Here’s an updated **README.md** with a centered demo image using your exact GitHub HTML snippet style (showing `Charting_example.png`). I also fixed a couple small inconsistencies (like `app_v2.py` vs `app.py`) in a safe way.
-
----
-
 # Live RIT Index Chart Visualizer
 
 This is a Python Flask application designed to visualize real-time market data from the **Rotman Interactive Trader (RIT)** simulation API. It generates a dynamic, auto-refreshing candlestick chart representing the market index, complete with live news headlines and simulation status.
