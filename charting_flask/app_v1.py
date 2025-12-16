@@ -13,7 +13,8 @@ from flask import Flask, Response, render_template
 app = Flask(__name__)
 
 # ====== CONFIG ======
-API = "http://flserver.rotman.utoronto.ca:14960/v1"   # <-- update if you prefer hostname instead of IP
+port = 14960
+API = f"http://flserver.rotman.utoronto.ca:{port}/v1"   # <-- update if you prefer hostname instead of IP
 HDRS = {"Authorization": "Basic MTox"}
 
 INTERVAL_SEC       = 10     # set to 10s per candle

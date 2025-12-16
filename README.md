@@ -57,7 +57,7 @@ TICK_LIMIT = 1800                                    # Simulation duration (tick
     Run the following command in your terminal:
 
     ```bash
-    python app.py
+    python app_v2.py
     ```
 
 2.  **Access the Chart:**

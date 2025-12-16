@@ -7,7 +7,8 @@ import mplfinance as mpf
 import matplotlib.dates as mdates  # for mapping datetimes to x-axis positions
 
 # ====== CONFIG ======
-API = "http://flserver.rotman.utoronto.ca:14960/v1"   # <-- update if you prefer hostname instead of IP
+port = 14960
+API = f"http://flserver.rotman.utoronto.ca:{port}/v1"   # <-- update if you prefer hostname instead of IP
 HDRS = {"Authorization": "Basic MTox"}
 
 INTERVAL_SEC  = 10      # set to 10s per candle
