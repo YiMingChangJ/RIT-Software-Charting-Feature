@@ -9,23 +9,28 @@ import matplotlib.pyplot as plt
 from matplotlib.patches import Rectangle
 from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
 from flask import Flask, Response, render_template, request, jsonify
-
+import base64
 app = Flask(__name__)
 """
 Enter url through web browswer: http://127.0.0.1:5000/
 Remember to create new user
 """
 # ====== CONFIG ======
-API = "http://flserver.rotman.utoronto.ca:14960/v1"
-HDRS = {"Authorization": "Basic MTox"}
+DMA_port = 10001
+API = f"http://flserver.rotman.utoronto.ca:{DMA_port}/v1"
+# API = "http://localhost:10001/v1"
+# HDRS = {"Authorization": "Basic MTox"}
+USERNAME = "1"
+PASSWORD = "1"
+HDRS = {'Authorization': 'Basic ' + base64.b64encode(f"{USERNAME}:{PASSWORD}".encode()).decode()}
 
 TICK_LIMIT         = 1800     # freeze once tick>=limit (or case stops)
 CASE_POLL_INTERVAL = 0.5
 NEWS_POLL_INTERVAL = 1.0
 
 # History polling (avoid hammering endpoint every frame)
-HIST_POLL_INTERVAL = 0.5
-HISTORY_LIMIT      = 15000     # if API supports "limit", we send it; otherwise ignored
+HIST_POLL_INTERVAL = 0.8
+HISTORY_LIMIT      = 200000     # if API supports "limit", we send it; otherwise ignored
 
 DEFAULT_CANDLE_TICKS = 10     # ticks per candle (10 => 10-tick candles)
 VISIBLE_MAX          = None   # None = show all candles; or set e.g. 400
