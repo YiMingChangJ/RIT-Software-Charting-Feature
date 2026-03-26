@@ -89,3 +89,20 @@ TICK_LIMIT = 1800                                    # Simulation duration (tick
 ## 📜 License
 
 This project is licensed under the **MIT License**. See the `LICENSE` file for details, and for educational purposes related to the Rotman Interactive Trader simulations.
+
+---
+
+## 📜 Acknowledgements
+
+Developed as part of the **Rotman International Trading Competition (RITC)** and **Rotman Finance Group Finance Research & Trading Lab** educational ecosystem.
+
+**Copyright © Rotman BMO Finance Group Finance Research & Trading Lab, University of Toronto.**
+All rights reserved.
+
+---
+
+## 🧩 Author
+
+**Yi-Ming Chang**
+Educational Developer, Rotman Finance Research & Trading Lab
+University of Toronto
