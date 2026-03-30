@@ -1,6 +1,6 @@
 # Live RIT Index Chart Visualizer
 
-This is a Python Flask application designed to visualize real-time market data from the **Rotman Interactive Trader (RIT)** simulation DMA REST API. It generates a dynamic, auto-refreshing candlestick chart representing the market index, complete with live news headlines and simulation status.
+This is a Python Flask application designed to visualize Social Outcry Case real-time market data from the Rotman Interactive Trader (RIT) simulation DMA REST API. It generates a dynamic, auto-refreshing candlestick chart representing the market index, complete with live news headlines and simulation status.
 
 ## 📸 Example Output
 
