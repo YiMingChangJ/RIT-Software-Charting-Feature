@@ -1,28 +1,38 @@
-# app.py
-import time
+# app_v1.py
+#
+# Original (live-polling) version of the RIT chart server. Builds candles
+# from /securities `last` price polled in real time. See app_v2.py for the
+# improved version that reads /securities/history and exposes ticker/candle
+# selection via query parameters.
+import base64
 import io
-import requests
+import os
 import textwrap
+import time
+
 import matplotlib
 matplotlib.use("Agg")  # backend for PNG rendering (no GUI)
 import matplotlib.pyplot as plt
-from matplotlib.patches import Rectangle
-from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
+import requests
 from flask import Flask, Response, render_template
-import base64
+from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
+from matplotlib.patches import Rectangle
+
 app = Flask(__name__)
 
 # ====== CONFIG ======
-port = 10001
-# API = f"http://flserver.rotman.utoronto.ca:{port}/v1"   # <-- update if you prefer hostname instead of IP
-HDRS = {"Authorization": "Basic MTox"}
+# All settings can be overridden via environment variables so credentials and
+# endpoints don't have to be edited in source.
+RIT_HOST = os.environ.get("RIT_HOST", "flserver.rotman.utoronto.ca")
+RIT_PORT = int(os.environ.get("RIT_PORT", "10001"))
+API = os.environ.get("RIT_API_URL", f"http://{RIT_HOST}:{RIT_PORT}/v1")
 
-API = "http://flserver.rotman.utoronto.ca:{port}/v1"
-# API = "http://localhost:10001/v1"
-# HDRS = {"Authorization": "Basic MTox"}
-USERNAME = "1"
-PASSWORD = "1"
-HDRS = {'Authorization': 'Basic ' + base64.b64encode(f"{USERNAME}:{PASSWORD}".encode()).decode()}
+USERNAME = os.environ.get("RIT_USERNAME", "1")
+PASSWORD = os.environ.get("RIT_PASSWORD", "1")
+HDRS = {
+    "Authorization": "Basic "
+    + base64.b64encode(f"{USERNAME}:{PASSWORD}".encode()).decode()
+}
 
 INTERVAL_SEC       = 10     # set to 10s per candle
 POLL_INTERVAL      = 0.2    # original polling freq (not used for sleep here)
@@ -45,7 +55,7 @@ s.headers.update(HDRS)
 # ---------- Helper Functions ----------
 def get_tick_status():
     """Return the live simulator tick and status."""
-    r = s.get(f"{API}/case")
+    r = s.get(f"{API}/case", timeout=2.0)
     j = r.json()
     return j["tick"], j["status"]
 
@@ -59,7 +69,7 @@ def get_news_headlines():
       - previous news is data[1]
     """
     try:
-        r = s.get(f"{API}/news")
+        r = s.get(f"{API}/news", timeout=2.0)
         r.raise_for_status()
         data = r.json()
     except Exception:
@@ -107,9 +117,6 @@ def wrap_headline(text: str, width: int = 100, max_lines: int = 4) -> str:
     # Limit number of lines
     lines = lines[:max_lines]
     return "\n".join(lines)
-
-# ticker (first security)
-tkr = s.get(f"{API}/securities").json()[0]['ticker']
 
 # ---------- Candlestick + state storage ----------
 # Each candle is a dict: {bucket, open, high, low, close}
@@ -162,7 +169,7 @@ def update_state():
 
         # Get latest price (current index level)
         try:
-            price = s.get(f"{API}/securities").json()[0]['last']
+            price = s.get(f"{API}/securities", timeout=2.0).json()[0]['last']
         except Exception as e:
             print("Error getting price:", e)
             # keep old price on error

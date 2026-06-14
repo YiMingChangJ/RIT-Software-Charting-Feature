@@ -1,30 +1,41 @@
-# app.py
+# app_v2.py
+#
+# Improved version of the RIT charting server. Reads /securities/history so
+# the chart works on case restarts (no need to be running when the case
+# starts), and exposes ticker + candle-size selection via query params on
+# /chart.png. The frontend (templates/index.html) drives these controls.
+#
+# Run: `python app_v2.py` then open http://127.0.0.1:5000/
+import base64
 import io
-import time
+import os
 import textwrap
-import requests
+import time
+
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
-from matplotlib.patches import Rectangle
+import requests
+from flask import Flask, Response, jsonify, render_template, request
 from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
-from flask import Flask, Response, render_template, request, jsonify
-import base64
-app = Flask(__name__)
-"""
-Enter url through web browswer: http://127.0.0.1:5000/
-Remember to create new user
-"""
-# ====== CONFIG ======
-DMA_port = 10001
-API = f"http://flserver.rotman.utoronto.ca:{DMA_port}/v1"
-# API = "http://localhost:10001/v1"
-# HDRS = {"Authorization": "Basic MTox"}
-USERNAME = "1"
-PASSWORD = "1"
-HDRS = {'Authorization': 'Basic ' + base64.b64encode(f"{USERNAME}:{PASSWORD}".encode()).decode()}
+from matplotlib.patches import Rectangle
 
-TICK_LIMIT         = 1800     # freeze once tick>=limit (or case stops)
+app = Flask(__name__)
+
+# ====== CONFIG ======
+# All settings can be overridden via environment variables.
+RIT_HOST = os.environ.get("RIT_HOST", "flserver.rotman.utoronto.ca")
+RIT_PORT = int(os.environ.get("RIT_PORT", "10001"))
+API = os.environ.get("RIT_API_URL", f"http://{RIT_HOST}:{RIT_PORT}/v1")
+
+USERNAME = os.environ.get("RIT_USERNAME", "1")
+PASSWORD = os.environ.get("RIT_PASSWORD", "1")
+HDRS = {
+    "Authorization": "Basic "
+    + base64.b64encode(f"{USERNAME}:{PASSWORD}".encode()).decode()
+}
+
+TICK_LIMIT         = int(os.environ.get("RIT_TICK_LIMIT", "1800"))  # freeze once tick>=limit (or case stops)
 CASE_POLL_INTERVAL = 0.5
 NEWS_POLL_INTERVAL = 1.0
 

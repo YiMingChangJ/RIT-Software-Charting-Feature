@@ -18,16 +18,29 @@ This is a Python Flask application designed to visualize Social Outcry Case real
 
 ## 📂 Project Structure
 
-**Important:** Flask requires HTML files to be placed in a `templates` folder. Ensure your directory looks like this:
+The Flask app lives under `charting_flask/`. Two versions are shipped:
+
+* `app_v1.py` — original live-polling version. Builds candles from the
+  current `/securities` price polled in real time. Best when you start the
+  app **before** the simulation starts.
+* `app_v2.py` — improved version. Reads `/securities/history`, so it
+  reconstructs the full chart even if you connect mid-case, exposes a
+  `/tickers` endpoint, and lets the frontend pick the ticker and candle
+  size via query parameters.
 
 ```text
-project-folder/
+RIT-Software-Charting-Feature/
 │
-├── app.py                # Main Flask application and plotting logic
-├── README.md             # This file
-├── Charting_example.png  # Example output image shown above
-└── templates/
-    └── index.html        # The HTML frontend (must be in this folder)
+├── README.md
+├── Charting_example.png       # Example output shown above
+├── RIT_Price_Plotting.py      # Standalone Matplotlib (non-Flask) version
+├── RIT_Price_Plotting_v2.py   # Standalone version using mplfinance
+└── charting_flask/
+    ├── app_v1.py              # Flask app (live polling)
+    ├── app_v2.py              # Flask app (history-based, recommended)
+    ├── requirements.txt
+    └── templates/
+        └── index.html         # Frontend (must live in `templates/`)
 ```
 
 ## 🛠 Prerequisites
@@ -40,48 +53,61 @@ project-folder/
 1. **Clone or Download** this repository.
 
 2. **Install Dependencies:**
-   It is recommended to use a virtual environment. Install the required libraries using `pip`:
+   It is recommended to use a virtual environment.
 
    ```bash
-   pip install flask requests matplotlib
+   pip install -r charting_flask/requirements.txt
    ```
 
 ## ⚙️ Configuration
 
-Open `app.py` to adjust the configuration settings at the top of the file to match your simulation environment:
+By default the app talks to `http://flserver.rotman.utoronto.ca:10001/v1`
+with the demo credentials (`1` / `1`). Override anything via environment
+variables — no source edits needed:
 
-```python
-# ====== CONFIG ======
-API = "http://flserver.rotman.utoronto.ca:14960/v1"  # API Endpoint
-HDRS = {"Authorization": "Basic MTox"}               # Authentication headers
-INTERVAL_SEC = 10                                    # Seconds per candlestick (if using time-bucket candles)
-TICK_LIMIT = 1800                                    # Simulation duration (ticks)
+| Variable        | Default                              | Purpose                          |
+| --------------- | ------------------------------------ | -------------------------------- |
+| `RIT_HOST`      | `flserver.rotman.utoronto.ca`        | API hostname                     |
+| `RIT_PORT`      | `10001`                              | API port (DMA REST)              |
+| `RIT_API_URL`   | `http://$RIT_HOST:$RIT_PORT/v1`      | Full override of the base URL    |
+| `RIT_USERNAME`  | `1`                                  | Basic-auth user                  |
+| `RIT_PASSWORD`  | `1`                                  | Basic-auth password              |
+| `RIT_TICK_LIMIT`| `1800`                               | Tick at which the chart freezes  |
+
+Example:
+
+```bash
+export RIT_HOST=localhost
+export RIT_PORT=10001
+python charting_flask/app_v2.py
 ```
 
 ## 🏃 Usage
 
 1. **Start the Application:**
-   Run the following command in your terminal:
 
    ```bash
-   python app_v2.py
+   python charting_flask/app_v2.py
    ```
 
 2. **Access the Chart:**
-   Open your web browser and navigate to:
-   `http://127.0.0.1:5000/`
+   Open `http://127.0.0.1:5000/` in a browser. Use the toolbar at the top
+   to pick a ticker and the number of ticks per candle.
 
 3. **Start the Simulation:**
-   Once the RIT case is started (status becomes `ACTIVE` or `RUNNING`), the chart will automatically begin plotting candles and updating news.
+   Once the RIT case is `ACTIVE` / `RUNNING`, the chart will begin updating.
 
 ## 🔧 Troubleshooting
 
 * **`TemplateNotFound: index.html` Error:**
-  Make sure you created a folder named `templates` and moved `index.html` inside it.
+  Make sure `index.html` is inside `charting_flask/templates/` and that you
+  run `python charting_flask/app_v2.py` (Flask looks for `templates/` next
+  to the app file).
 
 * **Empty Chart / No Data:**
-  Ensure the `API` URL in `app.py` is correct and that the Rotman server is reachable.
-  Check that your `HDRS` (Authorization) matches the credentials required by the server.
+  Ensure `RIT_HOST` / `RIT_PORT` (or `RIT_API_URL`) point to a reachable
+  Rotman server, and that `RIT_USERNAME` / `RIT_PASSWORD` match the
+  credentials configured in RIT.
 
 * **News Text Cut Off:**
   If news headlines are too long, the script automatically wraps them. You can adjust the wrapping width / max lines in the `wrap_headline` function or increase the figure size in `make_figure`.
